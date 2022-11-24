@@ -42,13 +42,6 @@
 (defun output (machine value)
   (push value (machine-out machine)))
 
-(-> store-binop (machine function function) t)
-(defun store-binop (machine binop next-param)
-  (let ((in1 (funcall next-param))
-        (in2 (funcall next-param))
-        (out (shift machine))) ;; output params are always in position mode
-    (store machine out (funcall binop in1 in2))))
-
 (defun next (machine)
   "Executes one round of `machine', modifying machine and returning it again for the
 next round. Returns `nil' if execution is done."
@@ -58,14 +51,49 @@ next round. Returns `nil' if execution is done."
      (multiple-value-bind (opcode next-param) (split-instruction machine instruction)
        (ecase opcode
          (99 nil)
-         (1 (store-binop machine #'+ next-param))
-         (2 (store-binop machine #'* next-param))
+         (1 (op-store-binop machine #'+ next-param))
+         (2 (op-store-binop machine #'* next-param))
          (3 (let ((value (read-input machine))
                   (param (shift machine)))
               (store machine param value)))
-         (4 (output machine (funcall next-param))))))))
+         (4 (output machine (funcall next-param)))
+         (5 (op-jump-if-true machine next-param))
+         (6 (op-jump-if-false machine next-param))
+         (7 (op-less-than machine next-param))
+         (8 (op-equals machine next-param)))))))
 
-(-> split-instruction (machine integer) (values integer function))
+(-> op-store-binop (machine function (function () fixnum)) t)
+(defun op-store-binop (machine binop next-param)
+  (let ((in1 (funcall next-param))
+        (in2 (funcall next-param))
+        (out (shift machine))) ;; output params are always in position mode
+    (store machine out (funcall binop in1 in2))))
+
+(-> op-jump-if-true (machine (function () fixnum)) t)
+(defun op-jump-if-true (machine next-param)
+  (if (/= 0 (funcall next-param))
+    (setf (machine-cursor machine) (funcall next-param))
+    (incf (machine-cursor machine))))
+
+(-> op-jump-if-false (machine (function() fixnum)) t)
+(defun op-jump-if-false (machine next-param)
+  (if (= 0 (funcall next-param))
+    (setf (machine-cursor machine) (funcall next-param))
+    (incf (machine-cursor machine))))
+
+(-> op-less-than (machine (function () fixnum)) t)
+(defun op-less-than (machine next-param)
+  (if (< (funcall next-param) (funcall next-param))
+    (store machine (shift machine) 1)
+    (store machine (shift machine) 0)))
+
+(-> op-equals (machine (function () fixnum)) t)
+(defun op-equals (machine next-param)
+  (if (= (funcall next-param) (funcall next-param))
+    (store machine (shift machine) 1)
+    (store machine (shift machine) 0)))
+
+(-> split-instruction (machine fixnum) (values fixnum function))
 (defun split-instruction (machine instruction)
   "Splits an instruction into the opcode and the parameter modes"
   (multiple-value-bind (param-modes opcode) (floor instruction 100)
@@ -79,9 +107,10 @@ next round. Returns `nil' if execution is done."
           (0 (mref machine value))
           (1 value))))))
 
-(-> next-digit (integer) function)
+(-> next-digit (fixnum) function)
 (defun next-digit (number)
   (let ((iter number))
+    (declare (fixnum iter))
     (lambda ()
       (multiple-value-bind (next-iter digit) (floor iter 10)
         (setf iter next-iter)
