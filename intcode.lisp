@@ -4,17 +4,34 @@
                 #:->
                 #:split-sequence)
   (:import-from #:uiop
-                #:read-file-string))
+                #:read-file-string)
+  (:export
+   :call
+   :machine
+   :machine-from-file
+   :machine-from-list
+   :machine-from-string
+   :run))
 
 (in-package :advent-of-code-2019/intcode)
 
 ;; (defparameter *example* (machine-from-string "1,9,10,3,2,3,11,0,99,30,40,50"))
 
+(defun list-input-reader (list)
+  (let ((current list))
+    (lambda ()
+      (pop current))))
+
+(defun list-output-writer (tail)
+  (lambda (value)
+    (setf (cdr tail) (cons value nil))
+    (setf tail (cdr tail))))
+
 (defstruct machine
   (cursor 0 :type integer)
   (data (make-hash-table) :type hash-table)
-  (in nil :type list)
-  (out nil :type list)
+  (in (list-input-reader nil) :type (function nil (or null integer)))
+  (out (list-output-writer nil) :type (function (integer) t))
   (relative-base 0 :type integer))
 
 (defun machine-from-list (list)
@@ -49,7 +66,7 @@
 
 (defun read-input (machine)
   (or
-   (pop (machine-in machine))
+   (funcall (machine-in machine))
    (error "attempted read from empty input")))
 
 (defun store (machine position value)
@@ -59,7 +76,7 @@
         value))
 
 (defun output (machine value)
-  (push value (machine-out machine)))
+  (funcall (machine-out machine) value))
 
 (defun store-next-param (machine next-param value)
   (multiple-value-bind (old-position position mode) (funcall next-param)
@@ -146,11 +163,23 @@ next round. Returns `nil' if execution is done."
         (setf iter next-iter)
         digit))))
 
-(defun run (machine &key (input nil))
-  (setf (machine-in machine) input)
+(defun run (machine &key (input nil) (output nil))
+  "Run the machine step by step until completion"
+  (when input
+    (setf (machine-in machine) input))
+  (when output
+    (setf (machine-out machine) output))
   (loop named runner do
     (multiple-value-bind (next-machine has-next) (next machine)
       (if has-next
           (setf machine next-machine)
           (return-from runner))))
-  (values machine (mref machine 0)))
+  machine)
+
+(defun call (machine &rest input)
+  "Call `machine' as if it were a function, with the function arguments passed as
+the machine's input, and the machine's output as the return values."
+  (let ((output (cons nil nil)))
+    (run machine :input (list-input-reader input)
+                 :output (list-output-writer output))
+    (values-list (cdr output))))
