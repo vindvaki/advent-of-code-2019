@@ -3,7 +3,11 @@
   (:import-from :advent-of-code-2019/intcode)
   (:import-from #:trivia
                 #:ematch)
-  (:local-nicknames (:intcode :advent-of-code-2019/intcode)))
+  (:local-nicknames (:intcode :advent-of-code-2019/intcode))
+  (:export
+   :part-1
+   :part-2
+   :load-input))
 
 (in-package :advent-of-code-2019/day-11)
 

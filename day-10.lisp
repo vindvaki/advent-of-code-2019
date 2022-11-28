@@ -1,7 +1,11 @@
 (defpackage :advent-of-code-2019/day-10
   (:use :cl)
   (:import-from #:alexandria
-      #:hash-table-keys))
+      #:hash-table-keys)
+  (:export
+   :part-1
+   :part-2
+   :load-input))
 
 (in-package :advent-of-code-2019/day-10)
 
