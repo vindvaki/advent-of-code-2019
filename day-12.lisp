@@ -74,7 +74,6 @@
 
 (defun part-1 (moons &optional (count 1000))
   (dotimes (i count)
-    (declare (ignore i))
     (simulate-once moons))
   (total-energy moons))
 
