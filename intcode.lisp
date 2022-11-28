@@ -7,6 +7,8 @@
                 #:read-file-string)
   (:export
    :call
+   :list-input-reader
+   :list-output-writer
    :machine
    :machine-from-file
    :machine-from-list
