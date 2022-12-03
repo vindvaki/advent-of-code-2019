@@ -20,4 +20,4 @@
                                    (setf (gethash (cons x y) screen) tile-id))))
                             (setf output-state (mod (1+ output-state) 3)))))
     (intcode:run machine :output output-callback)
-    screen))
+    (loop for value being the hash-values of screen counting (= 2 value))))
