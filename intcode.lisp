@@ -5,8 +5,11 @@
                 #:split-sequence)
   (:import-from #:uiop
                 #:read-file-string)
+  (:import-from #:alexandria
+                #:copy-hash-table)
   (:export
    :call
+   :copy-machine
    :list-input-reader
    :list-output-writer
    :machine
@@ -29,12 +32,22 @@
     (setf (cdr tail) (cons value nil))
     (setf tail (cdr tail))))
 
-(defstruct machine
+(defstruct (machine (:copier nil))
   (cursor 0 :type integer)
   (data (make-hash-table) :type hash-table)
   (in (list-input-reader nil) :type (function nil (or null integer)))
   (out (list-output-writer nil) :type (function (integer) t))
   (relative-base 0 :type integer))
+
+(defun copy-machine (machine)
+  "Deep copies the intcode machine's slots except for `in' and `out' because those are arbitrary functions"
+  (with-slots (cursor data in out relative-base) machine
+    (make-machine
+     :cursor cursor
+     :data (copy-hash-table data)
+     :in in
+     :out out
+     :relative-base relative-base)))
 
 (defun machine-from-list (list)
   (make-machine :data (loop with table = (make-hash-table)
