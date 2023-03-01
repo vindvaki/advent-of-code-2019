@@ -3,10 +3,18 @@
   (:import-from :advent-of-code-2019/intcode)
   (:import-from :bordeaux-threads)
   (:import-from #:alexandria
+                #:define-constant
                 #:copy-hash-table
                 #:when-let)
   (:import-from #:serapeum
+                #:drop
+                #:take
                 #:collecting)
+  (:import-from #:sketch
+                #:make-pen
+                #:rect
+                #:with-pen
+                #:defsketch)
   (:local-nicknames (:intcode :advent-of-code-2019/intcode)
                     (:bt :bordeaux-threads)))
 
@@ -14,35 +22,46 @@
 
 (defstruct (arcade-cabinet (:copier nil))
   (machine nil :type intcode:machine)
-  (screen (make-hash-table :test 'equal) :type hash-table)
   (input nil :type list)
-  (score 0 :type integer))
+  (screen (make-hash-table :test 'equal) :type hash-table)
+  (score 0 :type integer)
+  (output-state 0 :type integer)
+  (x 0 :type integer)
+  (y 0 :type integer))
 
-(defun run-arcade-cabinet (arcade-cabinet &optional (on-score-change #'identity))
-  (let* ((output-state 0)
-         (x 0)
-         (y 0)
-         (tile-id 0)
-         (output-callback (lambda (instruction)
-                            (case output-state
-                              (0 (setf x instruction))
-                              (1 (setf y instruction))
-                              (2 (progn
-                                   (setf tile-id instruction)
-                                   (if (>= x 0)
-                                       (setf (gethash (cons x y) (arcade-cabinet-screen arcade-cabinet)) tile-id)
-                                       (when (> tile-id 0)
-                                         (incf (arcade-cabinet-score arcade-cabinet) tile-id)
-                                         (funcall on-score-change arcade-cabinet))))))
-                            (setf output-state (mod (1+ output-state) 3)))))
+(defconstant +blank+ 0)
+(defconstant +wall+ 1)
+(defconstant +brick+ 2)
+(defconstant +paddle+ 3)
+(defconstant +ball+ 4)
+
+(defun run-arcade-cabinet (arcade-cabinet &optional (on-checkpoint (lambda ())))
+  (let* ((consumed nil)
+         (output-callback (lambda (instruction &aux (is-checkpoint nil))
+                            (with-slots (screen score output-state x y) arcade-cabinet
+                              (case output-state
+                                (0 (setf x instruction))
+                                (1 (setf y instruction))
+                                (2 (if (and (= x -1) (= y 0))
+                                       (incf score instruction)
+                                       (progn
+                                         (if (= 0 instruction)
+                                             (remhash (cons x y) screen)
+                                             (setf (gethash (cons x y) screen) instruction))
+                                         (when (and (= instruction +ball+)
+                                                    (find +paddle+ (list (gethash (cons (1+ x) (1+ y)) screen 0)
+                                                                         (gethash (cons (1- x) (1+ y)) screen 0)
+                                                                         (gethash (cons x (1+ y)) screen 0))))
+                                           (setf is-checkpoint t))))))
+                              (prog1 (setf output-state (mod (1+ output-state) 3))
+                                (when is-checkpoint
+                                  (funcall on-checkpoint)))))))
     (intcode:run (arcade-cabinet-machine arcade-cabinet)
                  :output output-callback
-                 :input (joystick-input-list-reader (arcade-cabinet-input arcade-cabinet)))
+                 :input (lambda () (let ((result (or (pop (arcade-cabinet-input arcade-cabinet)) 0)))
+                                     (push result consumed)
+                                     result)))
     arcade-cabinet))
-
-(defun joystick-input-list-reader (list)
-  (lambda ()
-    (or (pop list) 0)))
 
 (defun load-input ()
   (uiop:read-file-string "day-13.input"))
@@ -62,38 +81,81 @@
          (height (loop for (x . y) being the hash-keys of (arcade-cabinet-screen first-run)
                        maximizing y)))
     (intcode::store (arcade-cabinet-machine arcade-cabinet) 0 2)
-    (solve-arcade-cabinet arcade-cabinet (- (* 2 height)) (* 2 height))))
+    (solve-arcade-cabinet arcade-cabinet (* 2 height))))
 
 (defun count-blocks (screen)
   (loop for value being the hash-values of screen counting (= 2 value)))
 
 (defun solvedp (arcade-cabinet)
-  (= 0 (count-blocks (arcade-cabinet-screen arcade-cabinet))))
+  (with-slots (screen) arcade-cabinet
+    (and (> (hash-table-count screen) 0)
+         (= 0 (count-blocks screen)))))
 
-(defun copy-arcade-cabinet (arcade-cabinet)
-  (with-slots (machine screen input score) arcade-cabinet
-    (make-arcade-cabinet
-     :machine (intcode:copy-machine machine)
-     :screen (copy-hash-table screen)
-     :input input
-     :score score)))
+(defun copy-arcade-cabinet (arcade-cabinet &rest overrides)
+  (with-slots (machine screen input score output-state x y) arcade-cabinet
+    (let ((new-slots (list
+                      :machine (intcode:copy-machine machine)
+                      :screen (copy-hash-table screen)
+                      :input input
+                      :score score
+                      :output-state output-state
+                      :x x
+                      :y y)))
+      (loop for (key value) on overrides
+            for i = 0 then (1+ i)
+            when (evenp i) do
+              (setf (getf new-slots key) value))
+      (apply #'make-arcade-cabinet new-slots))))
 
-(defun make-joystick-input (signed-amount)
-  (let ((signum (signum signed-amount)))
-    (collecting
-      (dotimes (i (abs signed-amount))
-        (collect signum)))))
-
-(defun solve-arcade-cabinet (current min-input max-input)
+(defun solve-arcade-cabinet (current max-moves &optional (visited (make-hash-table :test 'equal)))
   "Recursively play until done"
-  (loop for input from min-input to max-input do
-    (let* ((next (copy-arcade-cabinet current))
-           (snapshot nil))
-      (setf (arcade-cabinet-input next) (make-joystick-input input))
-      (run-arcade-cabinet next (lambda (_)
-                                 (declare (ignore _))
-                                 (setf snapshot (copy-arcade-cabinet current))))
-      (when snapshot
-        (solve-arcade-cabinet snapshot min-input max-input)
-        (when (solvedp snapshot)
-          (return-from solve-arcade-cabinet snapshot))))))
+  (declare (optimize (speed 3)))
+  (setf (gethash (arcade-cabinet-signature current) visited) t)
+  (when (solvedp current)
+    (return-from solve-arcade-cabinet current))
+  (loop for signed-input from (- max-moves) to max-moves
+        for moves = (abs signed-input)
+        for direction = (signum signed-input)
+        for input = (make-list moves :initial-element direction)
+        for next = (copy-arcade-cabinet current :input input)
+        for snapshot = nil
+        do (progn
+             (run-arcade-cabinet next (lambda () (setf snapshot (copy-arcade-cabinet next))))
+             (when (and snapshot
+                        (not (gethash (arcade-cabinet-signature snapshot) visited)))
+               (print (arcade-cabinet-score next))
+               (let ((maybe-solved (solve-arcade-cabinet snapshot max-moves visited)))
+                (when maybe-solved
+                  (return-from solve-arcade-cabinet maybe-solved)))))))
+
+(defun arcade-cabinet-signature (cabinet)
+  (sort
+   (loop for (x . y) being the hash-key of (arcade-cabinet-screen cabinet)
+           using (hash-value z)
+         collecting (list x y z))
+   (lambda (a b)
+     (destructuring-bind (ax ay az) a
+       (destructuring-bind (bx by bz) b
+         (or (< ax bx)
+             (and (= ax bx)
+                  (<= ay by))
+             (and (= ax bx)
+                  (= ay by)
+                  (<= az bz))))))))
+
+(defsketch intpong
+    ((name "intpong")
+     (screen nil)
+     (pixel-scale 10))
+  (loop for (x . y) being the hash-key of screen using (hash-value tile-id) do
+    (let ((color (ecase tile-id
+                   (0 sketch:+white+)
+                   (1 sketch:+black+)
+                   (2 sketch:+yellow+)
+                   (3 sketch:+red+)
+                   (4 sketch:+green+))))
+      (with-pen (make-pen :fill color)
+        (rect (* pixel-scale x)
+              (* pixel-scale y)
+              pixel-scale
+              pixel-scale)))))
