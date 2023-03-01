@@ -43,7 +43,7 @@
                                 (0 (setf x instruction))
                                 (1 (setf y instruction))
                                 (2 (if (and (= x -1) (= y 0))
-                                       (incf score instruction)
+                                       (setf score instruction)
                                        (progn
                                          (if (= 0 instruction)
                                              (remhash (cons x y) screen)
@@ -113,20 +113,22 @@
   (setf (gethash (arcade-cabinet-signature current) visited) t)
   (when (solvedp current)
     (return-from solve-arcade-cabinet current))
-  (loop for signed-input from (- max-moves) to max-moves
-        for moves = (abs signed-input)
-        for direction = (signum signed-input)
-        for input = (make-list moves :initial-element direction)
-        for next = (copy-arcade-cabinet current :input input)
-        for snapshot = nil
-        do (progn
-             (run-arcade-cabinet next (lambda () (setf snapshot (copy-arcade-cabinet next))))
-             (when (and snapshot
-                        (not (gethash (arcade-cabinet-signature snapshot) visited)))
-               (print (arcade-cabinet-score next))
-               (let ((maybe-solved (solve-arcade-cabinet snapshot max-moves visited)))
-                (when maybe-solved
-                  (return-from solve-arcade-cabinet maybe-solved)))))))
+  (loop for direction in '(-1 +1) do
+    (loop named inner
+          for moves from 0 to max-moves
+          for input = (make-list moves :initial-element direction)
+          for next = (copy-arcade-cabinet current :input input)
+          for snapshot = nil
+          do (progn
+               (run-arcade-cabinet next (lambda () (setf snapshot (copy-arcade-cabinet next))))
+               (when snapshot
+                 (when (= 3720590 (arcade-cabinet-score next))
+                   (make-instance 'intpong :screen (arcade-cabinet-screen next)))
+                 (unless (gethash (arcade-cabinet-signature snapshot) visited)
+                   (print (arcade-cabinet-score next))
+                   (let ((maybe-solved (solve-arcade-cabinet snapshot max-moves visited)))
+                      (when maybe-solved
+                          (return-from solve-arcade-cabinet maybe-solved)))))))))
 
 (defun arcade-cabinet-signature (cabinet)
   (sort
