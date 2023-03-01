@@ -81,7 +81,7 @@
          (height (loop for (x . y) being the hash-keys of (arcade-cabinet-screen first-run)
                        maximizing y)))
     (intcode::store (arcade-cabinet-machine arcade-cabinet) 0 2)
-    (solve-arcade-cabinet arcade-cabinet (* 2 height))))
+    (arcade-cabinet-score (solve-arcade-cabinet arcade-cabinet (* 2 height)))))
 
 (defun count-blocks (screen)
   (loop for value being the hash-values of screen counting (= 2 value)))
@@ -111,8 +111,6 @@
   "Recursively play until done"
   (declare (optimize (speed 3)))
   (setf (gethash (arcade-cabinet-signature current) visited) t)
-  (when (solvedp current)
-    (return-from solve-arcade-cabinet current))
   (loop for direction in '(-1 +1) do
     (loop named inner
           for moves from 0 to max-moves
@@ -122,10 +120,10 @@
           do (progn
                (run-arcade-cabinet next (lambda () (setf snapshot (copy-arcade-cabinet next))))
                (when snapshot
-                 (when (= 3720590 (arcade-cabinet-score next))
-                   (make-instance 'intpong :screen (arcade-cabinet-screen next)))
                  (unless (gethash (arcade-cabinet-signature snapshot) visited)
-                   (print (arcade-cabinet-score next))
+                   (when (> (arcade-cabinet-score next) 0)
+                     ;; (make-instance 'intpong :screen (arcade-cabinet-screen next))
+                     (return-from solve-arcade-cabinet next))
                    (let ((maybe-solved (solve-arcade-cabinet snapshot max-moves visited)))
                       (when maybe-solved
                           (return-from solve-arcade-cabinet maybe-solved)))))))))
