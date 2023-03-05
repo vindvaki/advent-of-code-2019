@@ -16,11 +16,14 @@
    :machine-from-file
    :machine-from-list
    :machine-from-string
-   :run))
+   :run
+   :+opcode-halt+))
 
 (in-package :advent-of-code-2019/intcode)
 
 ;; (defparameter *example* (machine-from-string "1,9,10,3,2,3,11,0,99,30,40,50"))
+
+(defconstant +opcode-halt+ 99)
 
 (defun list-input-reader (list)
   (let ((current list))

@@ -67,7 +67,7 @@
                          max-distance distance)
                    (intcode:run next-machine
                                :output (lambda (out) (setf output out))
-                               :input (intcode:list-input-reader (append next-steps (list 99))))
+                               :input (intcode:list-input-reader (append next-steps (list intcode:+opcode-halt+))))
                    (ecase output
                      (0 nil)
                      (1 (serapeum:enq (list next-coordinate next-steps (1+ max-distance)) queue))
