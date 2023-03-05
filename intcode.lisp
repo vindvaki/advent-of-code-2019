@@ -79,7 +79,7 @@
   (prog1 (mref machine (machine-cursor machine))
     (incf (machine-cursor machine))))
 
-(defun read-input (machine)
+(defun op-read-input (machine)
   (or
    (funcall (machine-in machine))
    (error "attempted read from empty input")))
@@ -90,7 +90,7 @@
   (setf (gethash position (machine-data machine))
         value))
 
-(defun output (machine value)
+(defun op-write-output (machine value)
   (funcall (machine-out machine) value))
 
 (defun store-next-param (machine next-param value)
@@ -109,9 +109,9 @@ next round. Returns `nil' if execution is done."
          (99 nil)
          (1 (op-store-binop machine #'+ next-param))
          (2 (op-store-binop machine #'* next-param))
-         (3 (let ((value (read-input machine)))
+         (3 (let ((value (op-read-input machine)))
               (store-next-param machine next-param value)))
-         (4 (output machine (funcall next-param)))
+         (4 (op-write-output machine (funcall next-param)))
          (5 (op-jump-if-true machine next-param))
          (6 (op-jump-if-false machine next-param))
          (7 (op-less-than machine next-param))
