@@ -48,10 +48,16 @@
           do (format t "~D ~%" d)
         collecting (abs (rem d 10))))
 
+(defun part-1 (input)
+  (let ((sig (parse-input input)))
+    (dotimes (i 100)
+      (setf sig (flawed-frequency-transmission sig)))
+    (number-from-digits (take 8 sig))))
+
 (defun parse-input (input)
-  (loop for c across input
-        for d = (- (char-code c) (char-code #\0))
-        collecting d))
+ (loop for c across input
+       for d = (- (char-code c) (char-code #\0))
+       collecting d))
 
 (defun number-from-digits (digits &optional (base 10))
   (loop for d in digits
