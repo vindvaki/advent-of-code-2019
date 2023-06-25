@@ -5,6 +5,7 @@
                 #:if-let
                 #:define-constant)
   (:import-from #:serapeum
+                #:drop
                 #:->
                 #:trim-whitespace
                 #:take)
@@ -53,6 +54,24 @@
     (dotimes (i 100)
       (setf sig (flawed-frequency-transmission sig)))
     (number-from-digits (take 8 sig))))
+
+;; For part 2, observe that
+;;
+;; 1. for _our_ input, the offset happens to be well beyond n/2, where n = (length input)
+;; 2. from n/2 onwards, digit i is just the sum of the last n-i digits in the signal
+(defun part-2 (input)
+  (let* ((base (parse-input input))
+         (sig (loop for i from 1 to 10000 appending base))
+         (offset (number-from-digits (take 7 sig)))
+         (rest (reverse (drop offset sig))))
+    (dotimes (i 100)
+      (setf rest (mapcar (lambda (x) (mod x 10)) (cumsum rest))))
+    (number-from-digits (take 8 (reverse rest)))))
+
+(defun cumsum (list)
+  (loop for x in list
+        for y = x then (+ y x)
+        collecting y))
 
 (defun parse-input (input)
  (loop for c across input
